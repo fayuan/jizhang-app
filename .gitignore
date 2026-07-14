@@ -1,0 +1,23 @@
+# 依赖包（几百MB，不需要备份，可从 package.json 重新安装）
+node_modules/
+
+# 编译输出
+out/
+
+# 打包输出
+release/
+
+# 数据库文件（记账数据，涉及隐私）
+*.db
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE 配置
+.vscode/
+.idea/
+
+# 日志
+*.log
+npm-debug.log*

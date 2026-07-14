@@ -1,0 +1,62 @@
+{
+  "name": "jizhang-app",
+  "version": "0.1.0",
+  "description": "记账 - 个人财务管理应用",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "cross-env ELECTRON_RUN_AS_NODE= electron-vite dev",
+    "build": "electron-vite build",
+    "pack": "electron-vite build && electron-builder --win portable",
+    "preview": "electron-vite preview",
+    "start": "cross-env ELECTRON_RUN_AS_NODE= electron ."
+  },
+  "keywords": [
+    "记账",
+    "finance",
+    "expense-tracker"
+  ],
+  "author": "",
+  "license": "MIT",
+  "build": {
+    "appId": "com.jizhang.app",
+    "productName": "记账",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "记账_${version}.exe"
+    }
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.6.1",
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "antd": "^5.29.3",
+    "dayjs": "^1.11.21",
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sql.js": "^1.14.1"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/node": "^26.1.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "cross-env": "^10.1.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^3.1.0",
+    "typescript": "^7.0.2",
+    "vite": "^5.4.21"
+  }
+}
