@@ -9,7 +9,10 @@ import {
   getExpenseStats,
   getTotalExpense,
   deleteExpense,
-  exportToCsv
+  exportToCsv,
+  addCategory,
+  updateCategory,
+  deleteCategory
 } from './database'
 
 // 注册所有 IPC 处理器
@@ -85,5 +88,21 @@ export function registerIpcHandlers(): void {
       return { success: true }
     }
     return { success: false }
+  })
+
+  // 分类管理
+  ipcMain.handle('db:addCategory', async (_event, { name, icon, parentId }) => {
+    const id = addCategory(name, icon, parentId)
+    return { id }
+  })
+
+  ipcMain.handle('db:updateCategory', async (_event, { id, name, icon }) => {
+    updateCategory(id, name, icon)
+    return { success: true }
+  })
+
+  ipcMain.handle('db:deleteCategory', async (_event, { id }) => {
+    deleteCategory(id)
+    return { success: true }
   })
 }

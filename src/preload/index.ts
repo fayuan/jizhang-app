@@ -16,7 +16,12 @@ const api = {
   exportCsv: (filters?: { startDate?: string; endDate?: string }) =>
     ipcRenderer.invoke('db:exportCsv', filters || {}),
   backup: () => ipcRenderer.invoke('db:backup'),
-  restore: () => ipcRenderer.invoke('db:restore')
+  restore: () => ipcRenderer.invoke('db:restore'),
+  addCategory: (data: { name: string; icon: string; parentId: number | null }) =>
+    ipcRenderer.invoke('db:addCategory', data),
+  updateCategory: (data: { id: number; name: string; icon: string }) =>
+    ipcRenderer.invoke('db:updateCategory', data),
+  deleteCategory: (id: number) => ipcRenderer.invoke('db:deleteCategory', { id })
 }
 
 // 使用 contextBridge 安全地暴露 API

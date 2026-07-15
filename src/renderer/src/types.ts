@@ -3,6 +3,7 @@ export interface Category {
   id: number
   name: string
   icon: string
+  isPreset: boolean
   children?: Category[]
 }
 
@@ -12,6 +13,7 @@ export interface SubCategory {
   name: string
   parentName: string
   parentIcon: string
+  isPreset: boolean
 }
 
 // 支出记录类型
@@ -45,6 +47,11 @@ export interface AppAPI {
   getTotalExpense: (filters?: { startDate?: string; endDate?: string }) => Promise<number>
   deleteExpense: (id: number) => Promise<void>
   exportCsv: (filters?: { startDate?: string; endDate?: string }) => Promise<{ success: boolean }>
+  backup: () => Promise<{ success: boolean }>
+  restore: () => Promise<{ success: boolean }>
+  addCategory: (data: { name: string; icon: string; parentId: number | null }) => Promise<{ id: number }>
+  updateCategory: (data: { id: number; name: string; icon: string }) => Promise<{ success: boolean }>
+  deleteCategory: (id: number) => Promise<{ success: boolean }>
 }
 
 declare global {

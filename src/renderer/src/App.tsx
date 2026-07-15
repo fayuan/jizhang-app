@@ -17,7 +17,11 @@ import {
   Radio,
   Popconfirm,
   message,
-  Spin
+  Spin,
+  Modal,
+  Tag,
+  Space,
+  Tooltip
 } from 'antd'
 import {
   PlusOutlined,
@@ -25,7 +29,9 @@ import {
   PieChartOutlined,
   DeleteOutlined,
   DownloadOutlined,
-  SettingOutlined
+  SettingOutlined,
+  EditOutlined,
+  FolderAddOutlined
 } from '@ant-design/icons'
 import zhCN from 'antd/locale/zh_CN'
 import dayjs, { Dayjs } from 'dayjs'
@@ -48,6 +54,12 @@ function App(): JSX.Element {
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<number | undefined>(undefined)
   const [initialLoading, setInitialLoading] = useState(true)
+
+  // 分类管理相关状态
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+  const [categoryEditing, setCategoryEditing] = useState<{ id: number; name: string; icon: string; parentId: number | null } | null>(null)
+  const [categoryForm] = Form.useForm()
+  const [categorySaving, setCategorySaving] = useState(false)
 
   // 根据筛选条件获取日期范围
   const getDateRange = (): { startDate?: string; endDate?: string } => {
@@ -134,6 +146,66 @@ function App(): JSX.Element {
       loadData()
     } catch (err) {
       message.error('删除失败')
+    }
+  }
+
+  // 打开新增分类弹窗
+  const handleOpenAddCategory = (parentId: number | null = null) => {
+    setCategoryEditing(null)
+    categoryForm.resetFields()
+    categoryForm.setFieldsValue({ parentId })
+    setCategoryModalOpen(true)
+  }
+
+  // 打开编辑分类弹窗
+  const handleOpenEditCategory = (cat: { id: number; name: string; icon: string; parentId: number | null }) => {
+    setCategoryEditing(cat)
+    categoryForm.setFieldsValue({
+      name: cat.name,
+      icon: cat.icon,
+      parentId: cat.parentId
+    })
+    setCategoryModalOpen(true)
+  }
+
+  // 保存分类（新增或编辑）
+  const handleSaveCategory = async (values: { name: string; icon: string; parentId: number | null }) => {
+    setCategorySaving(true)
+    try {
+      if (categoryEditing) {
+        // 编辑模式
+        await window.api.updateCategory({
+          id: categoryEditing.id,
+          name: values.name,
+          icon: values.icon || ''
+        })
+        message.success('分类已更新')
+      } else {
+        // 新增模式
+        await window.api.addCategory({
+          name: values.name,
+          icon: values.icon || '',
+          parentId: values.parentId ?? null
+        })
+        message.success('分类已添加')
+      }
+      setCategoryModalOpen(false)
+      loadData()
+    } catch (err: any) {
+      message.error(err?.message || '操作失败')
+    } finally {
+      setCategorySaving(false)
+    }
+  }
+
+  // 删除分类
+  const handleDeleteCategory = async (id: number) => {
+    try {
+      await window.api.deleteCategory(id)
+      message.success('分类已删除')
+      loadData()
+    } catch (err: any) {
+      message.error(err?.message || '删除失败')
     }
   }
 
@@ -636,17 +708,112 @@ function App(): JSX.Element {
             )}
 
             {activeTab === '4' && (
-              <Card title="支出分类">
+              <Card
+                title="支出分类"
+                extra={
+                  <Button
+                    type="primary"
+                    icon={<FolderAddOutlined />}
+                    onClick={() => handleOpenAddCategory(null)}
+                  >
+                    添加大类
+                  </Button>
+                }
+              >
                 {categories.map((cat) => (
-                  <div key={cat.id} style={{ marginBottom: 16 }}>
-                    <h4 style={{ marginBottom: 8, fontSize: 15 }}>
-                      <span style={{ marginRight: 8 }}>{cat.icon}</span>
-                      {cat.name}
-                    </h4>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <div key={cat.id} style={{ marginBottom: 20 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginBottom: 8
+                      }}
+                    >
+                      <span style={{ fontSize: 18 }}>{cat.icon}</span>
+                      <strong style={{ fontSize: 15 }}>{cat.name}</strong>
+                      <Tag color={cat.isPreset ? 'blue' : 'green'} style={{ fontSize: 11 }}>
+                        {cat.isPreset ? '预设' : '自定义'}
+                      </Tag>
+                      {!cat.isPreset && (
+                        <Space size="small">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() =>
+                              handleOpenEditCategory({
+                                id: cat.id,
+                                name: cat.name,
+                                icon: cat.icon,
+                                parentId: null
+                              })
+                            }
+                          />
+                          <Popconfirm
+                            title="确定删除这个大类和它下面的所有小分类？"
+                            onConfirm={() => handleDeleteCategory(cat.id)}
+                            okText="删除"
+                            cancelText="取消"
+                          >
+                            <Button type="text" danger size="small" icon={<DeleteOutlined />} />
+                          </Popconfirm>
+                        </Space>
+                      )}
+                      <Tooltip title="添加小分类">
+                        <Button
+                          type="dashed"
+                          size="small"
+                          icon={<PlusOutlined />}
+                          onClick={() => handleOpenAddCategory(cat.id)}
+                        />
+                      </Tooltip>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingLeft: 26 }}>
                       {cat.children?.map((sub) => (
-                        <Tag key={sub.id} style={{ fontSize: 13, padding: '2px 10px' }}>
+                        <Tag
+                          key={sub.id}
+                          style={{ fontSize: 13, padding: '2px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        >
                           {sub.name}
+                          {!sub.isPreset && (
+                            <Space size={0}>
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<EditOutlined style={{ fontSize: 10 }} />}
+                                style={{ padding: 0, width: 16, height: 16 }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenEditCategory({
+                                    id: sub.id,
+                                    name: sub.name,
+                                    icon: '',
+                                    parentId: cat.id
+                                  })
+                                }}
+                              />
+                              <Popconfirm
+                                title="确定删除这个小分类？"
+                                onConfirm={(e) => {
+                                  e?.stopPropagation()
+                                  handleDeleteCategory(sub.id)
+                                }}
+                                onCancel={(e) => e?.stopPropagation()}
+                                okText="删除"
+                                cancelText="取消"
+                              >
+                                <Button
+                                  type="text"
+                                  danger
+                                  size="small"
+                                  icon={<DeleteOutlined style={{ fontSize: 10 }} />}
+                                  style={{ padding: 0, width: 16, height: 16 }}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </Popconfirm>
+                            </Space>
+                          )}
                         </Tag>
                       ))}
                     </div>
@@ -661,7 +828,62 @@ function App(): JSX.Element {
           </Content>
         </Layout>
       </Layout>
-    </ConfigProvider>
+    {/* 分类管理弹窗 */}
+        <Modal
+          title={categoryEditing ? '编辑分类' : '新增分类'}
+          open={categoryModalOpen}
+          onCancel={() => setCategoryModalOpen(false)}
+          footer={null}
+          destroyOnClose
+        >
+          <Form
+            form={categoryForm}
+            layout="vertical"
+            onFinish={handleSaveCategory}
+            style={{ marginTop: 16 }}
+          >
+            <Form.Item
+              label="分类名称"
+              name="name"
+              rules={[{ required: true, message: '请输入分类名称' }]}
+            >
+              <Input placeholder="例如：宠物用品" maxLength={20} />
+            </Form.Item>
+
+            <Form.Item
+              label="图标（emoji表情）"
+              name="icon"
+            >
+              <Input placeholder="例如：🍜（可选）" maxLength={4} />
+            </Form.Item>
+
+            <Form.Item
+              label="所属大类"
+              name="parentId"
+            >
+              <Select
+                placeholder="选择所属大类（不选则为顶级大类）"
+                allowClear
+                options={categories.map((cat) => ({
+                  label: `${cat.icon} ${cat.name}`,
+                  value: cat.id
+                }))}
+              />
+            </Form.Item>
+
+            <Form.Item>
+              <Button
+                type="primary"
+                htmlType="submit"
+                block
+                loading={categorySaving}
+              >
+                {categoryEditing ? '保存修改' : '添加分类'}
+              </Button>
+            </Form.Item>
+          </Form>
+        </Modal>
+      </ConfigProvider>
   )
 }
 

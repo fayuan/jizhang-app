@@ -24,7 +24,7 @@ export async function initDatabase(): Promise<void> {
     db = new SQL.Database()
   }
 
-  // 创建表结构
+  // 创建表结构（新数据库）
   db.run(`
     CREATE TABLE IF NOT EXISTS categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,9 +32,17 @@ export async function initDatabase(): Promise<void> {
       icon TEXT NOT NULL DEFAULT '',
       parent_id INTEGER DEFAULT NULL,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      is_preset INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (parent_id) REFERENCES categories(id)
     )
   `)
+
+  // 迁移：旧数据库可能没有 is_preset 字段，尝试添加
+  try {
+    db.run(`ALTER TABLE categories ADD COLUMN is_preset INTEGER NOT NULL DEFAULT 0`)
+  } catch (_e) {
+    // 字段已存在，忽略
+  }
 
   db.run(`
     CREATE TABLE IF NOT EXISTS expenses (
@@ -125,10 +133,10 @@ function seedCategories(): void {
   ]
 
   const insertParent = db.prepare(
-    'INSERT INTO categories (name, icon, parent_id, sort_order) VALUES (?, ?, NULL, ?)'
+    'INSERT INTO categories (name, icon, parent_id, sort_order, is_preset) VALUES (?, ?, NULL, ?, 1)'
   )
   const insertChild = db.prepare(
-    'INSERT INTO categories (name, icon, parent_id, sort_order) VALUES (?, ?, ?, ?)'
+    'INSERT INTO categories (name, icon, parent_id, sort_order, is_preset) VALUES (?, ?, ?, ?, 1)'
   )
 
   for (let i = 0; i < categories.length; i++) {
@@ -152,7 +160,7 @@ export function getCategories(): any[] {
   if (!db) return []
 
   const rows = db.exec(`
-    SELECT id, name, icon, parent_id, sort_order
+    SELECT id, name, icon, parent_id, sort_order, is_preset
     FROM categories
     ORDER BY sort_order
   `)
@@ -164,11 +172,12 @@ export function getCategories(): any[] {
   const childrenMap: Record<number, any[]> = {}
 
   for (let i = 0; i < result.values.length; i++) {
-    const [id, name, icon, parentId, sortOrder] = result.values[i]
+    const [id, name, icon, parentId, sortOrder, isPreset] = result.values[i]
     const item = {
       id: id as number,
       name: name as string,
-      icon: icon as string
+      icon: icon as string,
+      isPreset: (isPreset as number) === 1
     }
 
     if (parentId === null) {
@@ -190,7 +199,7 @@ export function getSubCategories(): any[] {
   if (!db) return []
 
   const rows = db.exec(`
-    SELECT c.id, c.name, p.name as parent_name, p.icon as parent_icon
+    SELECT c.id, c.name, p.name as parent_name, p.icon as parent_icon, c.is_preset
     FROM categories c
     JOIN categories p ON c.parent_id = p.id
     ORDER BY p.sort_order, c.sort_order
@@ -198,12 +207,90 @@ export function getSubCategories(): any[] {
 
   if (rows.length === 0) return []
 
-  return rows[0].values.map(([id, name, parentName, parentIcon]) => ({
+  return rows[0].values.map(([id, name, parentName, parentIcon, isPreset]) => ({
     id: id as number,
     name: name as string,
     parentName: parentName as string,
-    parentIcon: parentIcon as string
+    parentIcon: parentIcon as string,
+    isPreset: (isPreset as number) === 1
   }))
+}
+
+// 添加分类（用户自定义）
+export function addCategory(name: string, icon: string, parentId: number | null): number {
+  if (!db) throw new Error('数据库未初始化')
+
+  // 获取当前最大的 sort_order
+  let maxSort = 0
+  if (parentId === null) {
+    const result = db.exec('SELECT COALESCE(MAX(sort_order), 0) FROM categories WHERE parent_id IS NULL')
+    maxSort = (result[0]?.values[0]?.[0] as number) || 0
+  } else {
+    const result = db.exec('SELECT COALESCE(MAX(sort_order), 0) FROM categories WHERE parent_id = ?')
+    // sql.js: exec() 不支持参数，用字符串拼接
+  }
+
+  // 获取最大 sort_order
+  const sortResult = db.exec(
+    parentId === null
+      ? 'SELECT COALESCE(MAX(sort_order), 0) as m FROM categories WHERE parent_id IS NULL'
+      : `SELECT COALESCE(MAX(sort_order), 0) as m FROM categories WHERE parent_id = ${parentId}`
+  )
+  const sortOrder = ((sortResult[0]?.values[0]?.[0] as number) || 0) + 1
+
+  db.run(
+    'INSERT INTO categories (name, icon, parent_id, sort_order, is_preset) VALUES (?, ?, ?, ?, 0)',
+    [name, icon, parentId, sortOrder]
+  )
+
+  const result = db.exec('SELECT last_insert_rowid()')
+  const id = result[0].values[0][0] as number
+  saveDatabase()
+  return id
+}
+
+// 修改分类名称和图标（仅限用户自定义分类）
+export function updateCategory(id: number, name: string, icon: string): boolean {
+  if (!db) throw new Error('数据库未初始化')
+
+  // 检查是否为系统预置分类
+  const checkResult = db.exec(`SELECT is_preset FROM categories WHERE id = ${id}`)
+  if (checkResult.length === 0) return false
+  if (checkResult[0].values[0][0] === 1) {
+    throw new Error('不能修改系统预置分类')
+  }
+
+  db.run('UPDATE categories SET name = ?, icon = ? WHERE id = ?', [name, icon, id])
+  saveDatabase()
+  return true
+}
+
+// 删除分类（仅限用户自定义分类，且未被支出记录使用）
+export function deleteCategory(id: number): boolean {
+  if (!db) throw new Error('数据库未初始化')
+
+  // 检查是否为系统预置分类
+  const checkResult = db.exec(`SELECT is_preset FROM categories WHERE id = ${id}`)
+  if (checkResult.length === 0) return false
+  if (checkResult[0].values[0][0] === 1) {
+    throw new Error('不能删除系统预置分类')
+  }
+
+  // 检查是否有子分类
+  const childResult = db.exec(`SELECT COUNT(*) as c FROM categories WHERE parent_id = ${id}`)
+  if ((childResult[0]?.values[0]?.[0] as number) > 0) {
+    throw new Error('请先删除该大类下的所有小分类')
+  }
+
+  // 检查是否有支出记录使用此分类
+  const expenseResult = db.exec(`SELECT COUNT(*) as c FROM expenses WHERE category_id = ${id}`)
+  if ((expenseResult[0]?.values[0]?.[0] as number) > 0) {
+    throw new Error('该分类下有支出记录，无法删除')
+  }
+
+  db.run('DELETE FROM categories WHERE id = ?', [id])
+  saveDatabase()
+  return true
 }
 
 // 添加支出记录
