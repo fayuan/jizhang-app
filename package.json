@@ -4,11 +4,11 @@
   "description": "记账 - 个人财务管理应用",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "cross-env ELECTRON_RUN_AS_NODE= electron-vite dev",
+    "dev": "unset ELECTRON_RUN_AS_NODE && electron-vite dev",
     "build": "electron-vite build",
     "pack": "electron-vite build && electron-builder --win portable",
     "preview": "electron-vite preview",
-    "start": "cross-env ELECTRON_RUN_AS_NODE= electron ."
+    "start": "unset ELECTRON_RUN_AS_NODE && electron ."
   },
   "keywords": [
     "记账",
